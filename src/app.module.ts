@@ -5,6 +5,8 @@ import { AppService } from './app.service.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { SupabaseModule } from './modules/supabase/supabase.module.js';
+import { ConfigModule } from '@nestjs/config';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -20,6 +22,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     UsersModule,
     GroupsModule,
     AuthModule,
+    SupabaseModule,
+    ConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
