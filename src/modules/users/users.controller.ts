@@ -1,6 +1,16 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
+import { CreateUserDto } from './dto/request/create-user.dto.js';
+import { AuthGuard } from '@nestjs/passport';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type.js';
 
 @Controller('users')
 export class UsersController {
@@ -9,6 +19,12 @@ export class UsersController {
   @Get()
   async getAllUsers() {
     return await this.usersService.getAllUsers();
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('self')
+  async getSelf(@Req() req: AuthenticatedRequest) {
+    return await this.usersService.getSelf(req.user.sub);
   }
 
   @Get(':id')

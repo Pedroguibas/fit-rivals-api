@@ -3,8 +3,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto.js';
+import { CreateUserDto } from './dto/request/create-user.dto.js';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { hash } from 'bcrypt';
@@ -31,6 +32,18 @@ export class UsersService {
       .single();
 
     if (error) throw new NotFoundException();
+
+    return data;
+  }
+
+  async getSelf(id: string) {
+    const { data, error } = await this.supabase
+      .from('vw_self_user')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw new UnauthorizedException();
 
     return data;
   }
