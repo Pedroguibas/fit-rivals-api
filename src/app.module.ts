@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { SupabaseModule } from './modules/supabase/supabase.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { RedisModule } from './modules/redis/redis.module.js';
+import { ActivitiesModule } from './modules/activities/activities.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -26,6 +27,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     SupabaseModule,
     ConfigModule,
     RedisModule,
+    ActivitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
