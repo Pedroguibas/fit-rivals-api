@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,6 +8,8 @@ import { CreateUserDto } from './dto/request/create-user.dto.js';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { hash } from 'bcrypt';
+import { UserResponse } from './dto/response/user-response.dto.js';
+import { parseUserType } from '../../helpers/parse-user-type.js';
 
 @Injectable()
 export class UsersService {
@@ -21,7 +22,7 @@ export class UsersService {
 
     if (error) throw new Error(error.message);
 
-    return data;
+    return data as UserResponse[];
   }
 
   async getUserById(id: string) {
@@ -29,38 +30,68 @@ export class UsersService {
       .from('vw_users')
       .select()
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) throw new NotFoundException();
+    if (error) throw new Error(error.message);
 
-    return data;
+    if (!data) throw new NotFoundException();
+
+    return parseUserType(data);
   }
 
   async getSelf(id: string) {
     const { data, error } = await this.supabase
-      .from('vw_self_user')
+      .from('vw_users')
       .select('*')
       .eq('id', id)
       .single();
 
     if (error) throw new UnauthorizedException();
 
-    return data;
+    return parseUserType(data);
   }
 
-  async createUser(body: CreateUserDto) {
+  async createUser(body: CreateUserDto): Promise<UserResponse> {
     const hashed_password = await hash(body.password, 12);
 
-    const { data, error } = await this.supabase.from('users').insert({
-      name: body.name,
-      email: body.email,
-      username: body.username,
-      password: hashed_password,
-    });
+    const { data, error } = await this.supabase
+      .from('users')
+      .insert({
+        name: body.name,
+        email: body.email,
+        username: body.username,
+        password: hashed_password,
+      })
+      .select(
+        `
+      id,
+      name,
+      email,
+      username,
+      role,
+      picture,
+      bio,
+      streak,
+      rank_rating,
+      created_at
+    `,
+      )
+      .single();
 
-    if (error) {
-      console.log(error);
-      throw new BadRequestException();
-    }
+    if (error) throw new Error(error.message);
+
+    return parseUserType(data);
+  }
+
+  async deleteUser(id: string) {
+    const { error } = await this.supabase
+      .from('users')
+      .update({
+        deleted: true,
+        deleted_at: Date.now(),
+      })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
   }
 }

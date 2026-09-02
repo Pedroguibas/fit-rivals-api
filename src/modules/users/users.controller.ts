@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
@@ -11,6 +13,7 @@ import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/request/create-user.dto.js';
 import { AuthGuard } from '@nestjs/passport';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type.js';
+import { AdminGuard } from '../../guards/admin/admin.guard.js';
 
 @Controller('users')
 export class UsersController {
@@ -34,6 +37,19 @@ export class UsersController {
 
   @Post()
   async createUser(@Body() body: CreateUserDto) {
-    await this.usersService.createUser(body);
+    return await this.usersService.createUser(body);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete()
+  async deleteSelf(@Req() req: AuthenticatedRequest) {
+    await this.usersService.deleteUser(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminGuard)
+  @Delete(':id')
+  async deleteUser(@Param('id', new ParseUUIDPipe()) id: string) {
+    await this.usersService.deleteUser(id);
   }
 }

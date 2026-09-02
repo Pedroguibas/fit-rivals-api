@@ -1,7 +1,7 @@
-import { GetUserResponse } from '../../../users/dto/response/get-user.dt.js';
+import { UserResponse } from '../../../users/dto/response/user-response.dto.js';
 import { ReactionTypeEnum } from '../request/react-to-activity.dto.js';
 
 export type ReactionResponse = {
-  user: GetUserResponse;
+  user: UserResponse;
   reaction: ReactionTypeEnum;
 };

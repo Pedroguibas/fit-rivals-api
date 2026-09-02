@@ -5,7 +5,12 @@ import { PayloadDto } from '../auth/dto/payload.dto.js';
 import { CreateActivityDto } from './dto/request/create-activity.dto.js';
 import { CreateActivityTypeDto } from './dto/request/create-activity-type.dto.js';
 import { ReactionTypeEnum } from './dto/request/react-to-activity.dto.js';
-import { ReactionResponse } from './dto/response/reaction.dto.js';
+import { ReactionResponse } from './dto/response/reaction-response.dto.js';
+import { ActivityResponse } from './dto/response/activity-response.dto.js';
+import { GroupResponse } from '../groups/dto/response/group-response.dto.js';
+import { UserResponse } from '../users/dto/response/user-response.dto.js';
+import { parseUserType } from '../../helpers/parse-user-type.js';
+import { parseActivityType } from '../../helpers/parse_activity_type.js';
 
 @Injectable()
 export class ActivitiesService {
@@ -15,29 +20,111 @@ export class ActivitiesService {
 
   async getActivities(id: string) {
     const { data, error } = await this.supabase
-      .from('activity')
+      .from('vw_activities')
       .select('*')
-      .eq('author_id', id)
-      .eq('deleted', false);
+      .eq('author_id', id);
 
     if (error) throw new Error(error.message);
 
-    return data;
+    const activityIds: string[] = [];
+
+    data.map((d) => activityIds.push(d.id));
+
+    const { data: participantsData, error: participantsError } =
+      await this.supabase
+        .from('activity_participants')
+        .select(
+          `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+        )
+        .in('activity_id', activityIds);
+
+    if (participantsError) throw new Error(participantsError.message);
+
+    const activities: ActivityResponse[] = [];
+
+    data.map((d) => {
+      const participants: UserResponse[] = [];
+
+      participantsData.map((p) => {
+        if (p.activity_id == d.id) participants.push(parseUserType(p.users));
+      });
+
+      const group: GroupResponse | null = d.group_id
+        ? {
+            id: d.group_id,
+            name: d.group_name,
+            picture: d.group_picture,
+          }
+        : null;
+
+      activities.push(parseActivityType(d, group, participants));
+    });
+
+    return activities;
   }
 
-  async getActivityById(id: string) {
+  async getActivityById(id: string): Promise<ActivityResponse> {
     const { data, error } = await this.supabase
-      .from('activity')
+      .from('activities')
       .select('*')
       .eq('id', id)
-      .eq('deleted', false)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
 
     if (!data) throw new NotFoundException();
 
-    return data;
+    const participants: UserResponse[] = [];
+
+    const { data: participantsData, error: participantsError } =
+      await this.supabase
+        .from('activity_participants')
+        .select(
+          `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+        )
+        .eq('activity_id', id);
+
+    if (participantsError) throw new Error(participantsError.message);
+
+    participantsData.map((p) => participants.push(parseUserType(p.users)));
+
+    const group: GroupResponse | null = data.group_id
+      ? {
+          id: data.group_id,
+          name: data.group_name,
+          picture: data.group_picture,
+        }
+      : null;
+
+    return parseActivityType(data, group, participants);
   }
 
   async getActivityReactions(id: string): Promise<ReactionResponse[]> {
@@ -53,27 +140,19 @@ export class ActivitiesService {
     data.map((d) =>
       reactions.push({
         reaction: d.reaction,
-        user: {
-          id: d.id,
-          name: d.name,
-          email: d.email,
-          username: d.username,
-          role: d.role,
-          picture: d.picture,
-          bio: d.bio,
-          streak: d.streak,
-          rankRating: d.rank_rating,
-          createdAt: d.created_at,
-        },
+        user: parseUserType(d),
       }),
     );
 
     return reactions;
   }
 
-  async createActivity(body: CreateActivityDto, user: PayloadDto) {
-    const { data, error } = await this.supabase
-      .from('activity')
+  async createActivity(
+    body: CreateActivityDto,
+    user: PayloadDto,
+  ): Promise<ActivityResponse> {
+    const { data: insertData, error: insertError } = await this.supabase
+      .from('activities')
       .insert({
         author_id: user.sub,
         type: body.type,
@@ -84,25 +163,67 @@ export class ActivitiesService {
       .select('id')
       .single();
 
-    if (error) throw new Error(error.message);
+    if (insertError) throw new Error(insertError.message);
 
+    const responseParticipants: UserResponse[] = [];
     if (body.participants) {
       const participants: { activity_id: string; user_id: string }[] = [];
 
       body.participants.map((p) =>
-        participants.push({ activity_id: data.id, user_id: p }),
+        participants.push({ activity_id: insertData.id, user_id: p }),
       );
 
-      const { error: participantsError } = await this.supabase
-        .from('activity_participants')
-        .insert(participants);
+      const { data: participantsData, error: participantsError } =
+        await this.supabase
+          .from('activity_participants')
+          .insert(participants)
+          .select(
+            `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+          )
+          .eq('activity_id', insertData.id);
 
       if (participantsError) throw new Error(participantsError.message);
+
+      participantsData.map((p) =>
+        responseParticipants.push(parseUserType(p.users)),
+      );
     }
+
+    const { data, error } = await this.supabase
+      .from('vw_activities')
+      .select('*')
+      .eq('id', insertData.id)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const group: GroupResponse | null = data.group_id
+      ? {
+          id: data.group_id,
+          name: data.group_name,
+          picture: data.group_picture,
+        }
+      : null;
+
+    return parseActivityType(data, group, responseParticipants);
   }
 
   async createActivityType(body: CreateActivityTypeDto) {
-    const { error } = await this.supabase.from('activity_type').insert({
+    const { error } = await this.supabase.from('activity_types').insert({
       name: body.name,
       discription: body.discription,
       reward_points: body.reward_points,
@@ -119,7 +240,7 @@ export class ActivitiesService {
   ) {
     const { data: reactionExists, error: reactionExistsError } =
       await this.supabase
-        .from('activity_reaction')
+        .from('activity_reactions')
         .select('reaction')
         .eq('activity_id', id)
         .eq('user_id', userId)
@@ -129,7 +250,7 @@ export class ActivitiesService {
 
     if (reactionExists) {
       const { error } = await this.supabase
-        .from('activity_reaction')
+        .from('activity_reactions')
         .update({
           reaction,
         })
@@ -138,7 +259,7 @@ export class ActivitiesService {
 
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await this.supabase.from('activity_reaction').insert({
+      const { error } = await this.supabase.from('activity_reactions').insert({
         activity_id: id,
         user_id: userId,
         reaction,
@@ -150,7 +271,7 @@ export class ActivitiesService {
 
   async deleteActivity(id: string, userId: string) {
     const { data, error } = await this.supabase
-      .from('activity')
+      .from('activities')
       .select('*')
       .eq('id', id)
       .eq('author_id', userId)
@@ -161,7 +282,7 @@ export class ActivitiesService {
     if (!data) throw new NotFoundException();
 
     const { error: delError } = await this.supabase
-      .from('activity')
+      .from('activities')
       .update({
         deleted: true,
       })
@@ -173,7 +294,7 @@ export class ActivitiesService {
 
   async deleteActivityReaction(id: string, userId: string) {
     const { data, error } = await this.supabase
-      .from('activity_reaction')
+      .from('activity_reactions')
       .select('*')
       .eq('activity_id', id)
       .eq('user_id', userId)
@@ -184,7 +305,7 @@ export class ActivitiesService {
     if (!data) throw new NotFoundException();
 
     const { error: delError } = await this.supabase
-      .from('activity_reaction')
+      .from('activity_reactions')
       .delete()
       .eq('activity_id', id)
       .eq('user_id', userId);
