@@ -24,7 +24,6 @@ export const parseActivityType = (
       name: data.author_name,
       email: data.author_email,
       username: data.author_username,
-      role: data.author_role,
       picture: data.author_picture,
       bio: data.author_bio,
       streak: data.author_streak,

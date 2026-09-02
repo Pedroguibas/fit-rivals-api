@@ -239,7 +239,6 @@ export class GroupsService {
           name: d.inviter_name,
           email: d.inviter_email,
           username: d.inviter_username,
-          role: d.inviter_role,
           picture: d.inviter_picture,
           bio: d.inviter_bio,
           streak: d.inviter_streak,
