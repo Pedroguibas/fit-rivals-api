@@ -1,15 +1,15 @@
 import {
-  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/request/create-user.dto.js';
-import { SupabaseClient, UserResponse } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { hash } from 'bcrypt';
-import { PayloadDto } from '../auth/dto/payload.dto.js';
+import { UserResponse } from './dto/response/user-response.dto.js';
+import { parseUserType } from '../../helpers/parse-user-type.js';
 
 @Injectable()
 export class UsersService {
@@ -36,7 +36,7 @@ export class UsersService {
 
     if (!data) throw new NotFoundException();
 
-    return data as UserResponse;
+    return parseUserType(data);
   }
 
   async getSelf(id: string) {
@@ -48,23 +48,39 @@ export class UsersService {
 
     if (error) throw new UnauthorizedException();
 
-    return data as UserResponse;
+    return parseUserType(data);
   }
 
-  async createUser(body: CreateUserDto) {
+  async createUser(body: CreateUserDto): Promise<UserResponse> {
     const hashed_password = await hash(body.password, 12);
 
-    const { error } = await this.supabase.from('users').insert({
-      name: body.name,
-      email: body.email,
-      username: body.username,
-      password: hashed_password,
-    });
+    const { data, error } = await this.supabase
+      .from('users')
+      .insert({
+        name: body.name,
+        email: body.email,
+        username: body.username,
+        password: hashed_password,
+      })
+      .select(
+        `
+      id,
+      name,
+      email,
+      username,
+      role,
+      picture,
+      bio,
+      streak,
+      rank_rating,
+      created_at
+    `,
+      )
+      .single();
 
-    if (error) {
-      console.log(error);
-      throw new BadRequestException();
-    }
+    if (error) throw new Error(error.message);
+
+    return parseUserType(data);
   }
 
   async deleteUser(id: string) {

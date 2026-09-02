@@ -8,6 +8,9 @@ import { ReactionTypeEnum } from './dto/request/react-to-activity.dto.js';
 import { ReactionResponse } from './dto/response/reaction-response.dto.js';
 import { ActivityResponse } from './dto/response/activity-response.dto.js';
 import { GroupResponse } from '../groups/dto/response/group-response.dto.js';
+import { UserResponse } from '../users/dto/response/user-response.dto.js';
+import { parseUserType } from '../../helpers/parse-user-type.js';
+import { parseActivityType } from '../../helpers/parse_activity_type.js';
 
 @Injectable()
 export class ActivitiesService {
@@ -19,14 +22,47 @@ export class ActivitiesService {
     const { data, error } = await this.supabase
       .from('vw_activities')
       .select('*')
-      .eq('author_id', id)
-      .eq('deleted', false);
+      .eq('author_id', id);
 
     if (error) throw new Error(error.message);
+
+    const activityIds: string[] = [];
+
+    data.map((d) => activityIds.push(d.id));
+
+    const { data: participantsData, error: participantsError } =
+      await this.supabase
+        .from('activity_participants')
+        .select(
+          `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+        )
+        .in('activity_id', activityIds);
+
+    if (participantsError) throw new Error(participantsError.message);
 
     const activities: ActivityResponse[] = [];
 
     data.map((d) => {
+      const participants: UserResponse[] = [];
+
+      participantsData.map((p) => {
+        if (p.activity_id == d.id) participants.push(parseUserType(p.users));
+      });
+
       const group: GroupResponse | null = d.group_id
         ? {
             id: d.group_id,
@@ -35,50 +71,60 @@ export class ActivitiesService {
           }
         : null;
 
-      activities.push({
-        id: d.id,
-        caption: d.caption,
-        picture: d.picture,
-        createdAt: d.created_at,
-        type: {
-          id: d.type_id,
-          name: d.type_name,
-          picture: d._type_picture,
-          discription: d.type_discription,
-          rewardPoints: d.type_reward_points,
-        },
-        author: {
-          id: d.author_id,
-          name: d.author_name,
-          email: d.author_email,
-          username: d.author_username,
-          role: d.author_role,
-          picture: d.author_picture,
-          bio: d.author_bio,
-          streak: d.author_streak,
-          rankRating: d.author_rank_rating,
-          createdAt: d.author_created_at,
-        },
-        group,
-      });
+      activities.push(parseActivityType(d, group, participants));
     });
 
     return activities;
   }
 
-  async getActivityById(id: string) {
+  async getActivityById(id: string): Promise<ActivityResponse> {
     const { data, error } = await this.supabase
       .from('activities')
       .select('*')
       .eq('id', id)
-      .eq('deleted', false)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
 
     if (!data) throw new NotFoundException();
 
-    return data;
+    const participants: UserResponse[] = [];
+
+    const { data: participantsData, error: participantsError } =
+      await this.supabase
+        .from('activity_participants')
+        .select(
+          `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+        )
+        .eq('activity_id', id);
+
+    if (participantsError) throw new Error(participantsError.message);
+
+    participantsData.map((p) => participants.push(parseUserType(p.users)));
+
+    const group: GroupResponse | null = data.group_id
+      ? {
+          id: data.group_id,
+          name: data.group_name,
+          picture: data.group_picture,
+        }
+      : null;
+
+    return parseActivityType(data, group, participants);
   }
 
   async getActivityReactions(id: string): Promise<ReactionResponse[]> {
@@ -94,26 +140,18 @@ export class ActivitiesService {
     data.map((d) =>
       reactions.push({
         reaction: d.reaction,
-        user: {
-          id: d.id,
-          name: d.name,
-          email: d.email,
-          username: d.username,
-          role: d.role,
-          picture: d.picture,
-          bio: d.bio,
-          streak: d.streak,
-          rankRating: d.rank_rating,
-          createdAt: d.created_at,
-        },
+        user: parseUserType(d),
       }),
     );
 
     return reactions;
   }
 
-  async createActivity(body: CreateActivityDto, user: PayloadDto) {
-    const { data, error } = await this.supabase
+  async createActivity(
+    body: CreateActivityDto,
+    user: PayloadDto,
+  ): Promise<ActivityResponse> {
+    const { data: insertData, error: insertError } = await this.supabase
       .from('activities')
       .insert({
         author_id: user.sub,
@@ -125,25 +163,67 @@ export class ActivitiesService {
       .select('id')
       .single();
 
-    if (error) throw new Error(error.message);
+    if (insertError) throw new Error(insertError.message);
 
+    const responseParticipants: UserResponse[] = [];
     if (body.participants) {
       const participants: { activity_id: string; user_id: string }[] = [];
 
       body.participants.map((p) =>
-        participants.push({ activity_id: data.id, user_id: p }),
+        participants.push({ activity_id: insertData.id, user_id: p }),
       );
 
-      const { error: participantsError } = await this.supabase
-        .from('activity_participants')
-        .insert(participants);
+      const { data: participantsData, error: participantsError } =
+        await this.supabase
+          .from('activity_participants')
+          .insert(participants)
+          .select(
+            `
+          activity_id,
+          users (
+          id,
+          name,
+          email,
+          username,
+          role,
+          picture,
+          bio,
+          streak,
+          rank_rating,
+          created_at
+          )  
+        `,
+          )
+          .eq('activity_id', insertData.id);
 
       if (participantsError) throw new Error(participantsError.message);
+
+      participantsData.map((p) =>
+        responseParticipants.push(parseUserType(p.users)),
+      );
     }
+
+    const { data, error } = await this.supabase
+      .from('vw_activities')
+      .select('*')
+      .eq('id', insertData.id)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const group: GroupResponse | null = data.group_id
+      ? {
+          id: data.group_id,
+          name: data.group_name,
+          picture: data.group_picture,
+        }
+      : null;
+
+    return parseActivityType(data, group, responseParticipants);
   }
 
   async createActivityType(body: CreateActivityTypeDto) {
-    const { error } = await this.supabase.from('activity_type').insert({
+    const { error } = await this.supabase.from('activity_types').insert({
       name: body.name,
       discription: body.discription,
       reward_points: body.reward_points,

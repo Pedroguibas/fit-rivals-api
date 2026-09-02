@@ -10,4 +10,5 @@ export type ActivityResponse = {
   type: ActivityTypeResponse;
   author: UserResponse;
   group: GroupResponse | null;
+  participants: UserResponse[];
 };
