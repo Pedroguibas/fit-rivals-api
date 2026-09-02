@@ -89,6 +89,19 @@ export class GroupsService {
     return data;
   }
 
+  async getGroupActivities(id: string, user: PayloadDto) {
+    await this.isUserInGroup(id, user);
+
+    const { data, error } = await this.supabase
+      .from('activity')
+      .select('*')
+      .eq('posted_on_group', id);
+
+    if (error) throw new Error(error.message);
+
+    return data;
+  }
+
   async inviteToGroup(
     group_id: string,
     users_to_add: string[],

@@ -39,6 +39,14 @@ export class GroupsController {
     return await this.groupsService.getGroupMembers(id, req.user);
   }
 
+  @Get(':id/activities')
+  async getGroupActivities(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return await this.groupsService.getGroupActivities(id, req.user);
+  }
+
   @Post()
   async createGroup(
     @Req() req: AuthenticatedRequest,
