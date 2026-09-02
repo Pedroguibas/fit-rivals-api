@@ -7,6 +7,6 @@ export type GetUserResponse = {
   picture: string | null;
   bio: string | null;
   streak: number;
-  rank_rating: number;
-  created_at: string;
+  rankRating: number;
+  createdAt: string;
 };

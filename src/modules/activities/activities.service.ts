@@ -1,10 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { PayloadDto } from '../auth/dto/payload.dto.js';
 import { CreateActivityDto } from './dto/request/create-activity.dto.js';
 import { CreateActivityTypeDto } from './dto/request/create-activity-type.dto.js';
 import { ReactionTypeEnum } from './dto/request/react-to-activity.dto.js';
+import { ReactionResponse } from './dto/response/reaction.dto.js';
 
 @Injectable()
 export class ActivitiesService {
@@ -16,7 +17,8 @@ export class ActivitiesService {
     const { data, error } = await this.supabase
       .from('activity')
       .select('*')
-      .eq('author_id', id);
+      .eq('author_id', id)
+      .eq('deleted', false);
 
     if (error) throw new Error(error.message);
 
@@ -28,22 +30,45 @@ export class ActivitiesService {
       .from('activity')
       .select('*')
       .eq('id', id)
-      .single();
+      .eq('deleted', false)
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
+
+    if (!data) throw new NotFoundException();
 
     return data;
   }
 
-  async getActivityReactions(id: string) {
+  async getActivityReactions(id: string): Promise<ReactionResponse[]> {
     const { data, error } = await this.supabase
-      .from('activity_reaction')
+      .from('vw_activity_reactions')
       .select('*')
       .eq('activity_id', id);
 
     if (error) throw new Error(error.message);
 
-    return data;
+    const reactions: ReactionResponse[] = [];
+
+    data.map((d) =>
+      reactions.push({
+        reaction: d.reaction,
+        user: {
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          username: d.username,
+          role: d.role,
+          picture: d.picture,
+          bio: d.bio,
+          streak: d.streak,
+          rankRating: d.rank_rating,
+          createdAt: d.created_at,
+        },
+      }),
+    );
+
+    return reactions;
   }
 
   async createActivity(body: CreateActivityDto, user: PayloadDto) {
@@ -121,5 +146,49 @@ export class ActivitiesService {
 
       if (error) throw new Error(error.message);
     }
+  }
+
+  async deleteActivity(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from('activity')
+      .select('*')
+      .eq('id', id)
+      .eq('author_id', userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+
+    if (!data) throw new NotFoundException();
+
+    const { error: delError } = await this.supabase
+      .from('activity')
+      .update({
+        deleted: true,
+      })
+      .eq('id', id)
+      .eq('author_id', userId);
+
+    if (delError) throw new Error(delError.message);
+  }
+
+  async deleteActivityReaction(id: string, userId: string) {
+    const { data, error } = await this.supabase
+      .from('activity_reaction')
+      .select('*')
+      .eq('activity_id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+
+    if (!data) throw new NotFoundException();
+
+    const { error: delError } = await this.supabase
+      .from('activity_reaction')
+      .delete()
+      .eq('activity_id', id)
+      .eq('user_id', userId);
+
+    if (delError) throw new Error(delError.message);
   }
 }

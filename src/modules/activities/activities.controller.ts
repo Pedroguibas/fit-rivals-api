@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
@@ -26,8 +28,13 @@ export class ActivitiesController {
   }
 
   @Get(':id')
-  async getActivityById(@Param('id') id: string) {
+  async getActivityById(@Param('id', new ParseUUIDPipe()) id: string) {
     return await this.activitiesService.getActivityById(id);
+  }
+
+  @Get(':id/reactions')
+  async getActivityReactions(@Param('id', new ParseUUIDPipe()) id: string) {
+    return await this.activitiesService.getActivityReactions(id);
   }
 
   @Post()
@@ -47,11 +54,30 @@ export class ActivitiesController {
   @Post(':id/reactions')
   async reactToActivity(
     @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() body: ReactToActivityDto,
   ) {
     return await this.activitiesService.reactToActivity(
       body.reactionType,
+      id,
+      req.user.sub,
+    );
+  }
+
+  @Delete(':id')
+  async deleteActivity(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return await this.activitiesService.deleteActivity(id, req.user.sub);
+  }
+
+  @Delete(':id/reactions')
+  async deleteActivityReaction(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return await this.activitiesService.deleteActivityReaction(
       id,
       req.user.sub,
     );
