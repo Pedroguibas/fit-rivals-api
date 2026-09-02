@@ -6,9 +6,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/request/create-user.dto.js';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, UserResponse } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { hash } from 'bcrypt';
+import { PayloadDto } from '../auth/dto/payload.dto.js';
 
 @Injectable()
 export class UsersService {
@@ -21,7 +22,7 @@ export class UsersService {
 
     if (error) throw new Error(error.message);
 
-    return data;
+    return data as UserResponse[];
   }
 
   async getUserById(id: string) {
@@ -29,29 +30,31 @@ export class UsersService {
       .from('vw_users')
       .select()
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) throw new NotFoundException();
+    if (error) throw new Error(error.message);
 
-    return data;
+    if (!data) throw new NotFoundException();
+
+    return data as UserResponse;
   }
 
   async getSelf(id: string) {
     const { data, error } = await this.supabase
-      .from('vw_self_user')
+      .from('vw_users')
       .select('*')
       .eq('id', id)
       .single();
 
     if (error) throw new UnauthorizedException();
 
-    return data;
+    return data as UserResponse;
   }
 
   async createUser(body: CreateUserDto) {
     const hashed_password = await hash(body.password, 12);
 
-    const { data, error } = await this.supabase.from('users').insert({
+    const { error } = await this.supabase.from('users').insert({
       name: body.name,
       email: body.email,
       username: body.username,
@@ -62,5 +65,17 @@ export class UsersService {
       console.log(error);
       throw new BadRequestException();
     }
+  }
+
+  async deleteUser(id: string) {
+    const { error } = await this.supabase
+      .from('users')
+      .update({
+        deleted: true,
+        deleted_at: Date.now(),
+      })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
   }
 }

@@ -5,9 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, UserResponse } from '@supabase/supabase-js';
 import { CreateGroupDto } from './dto/request/create-group.dto.js';
 import { PayloadDto } from '../auth/dto/payload.dto.js';
+import { GroupResponse } from './dto/response/group-response.dto.js';
+import { InviteResponse } from './dto/response/invite-response.dto.js';
 
 @Injectable()
 export class GroupsService {
@@ -41,14 +43,13 @@ export class GroupsService {
     data.map((m) => members.push(m.group_id));
 
     const { data: groupData, error: groupError } = await this.supabase
-      .from('groups')
+      .from('vw_groups')
       .select('*')
-      .in('id', members)
-      .eq('deleted', false);
+      .in('id', members);
 
     if (groupError) throw new Error(groupError.message);
 
-    return groupData;
+    return groupData as GroupResponse[];
   }
 
   async getGroupById(id: string, user: PayloadDto) {
@@ -62,7 +63,7 @@ export class GroupsService {
 
     if (error) throw new Error(error.message);
 
-    return data;
+    return data as GroupResponse;
   }
 
   async getGroupMembers(id: string, user: PayloadDto) {
@@ -86,14 +87,14 @@ export class GroupsService {
 
     if (error) throw new Error(error.message);
 
-    return data;
+    return data as UserResponse[];
   }
 
   async getGroupActivities(id: string, user: PayloadDto) {
     await this.isUserInGroup(id, user);
 
     const { data, error } = await this.supabase
-      .from('activity')
+      .from('activities')
       .select('*')
       .eq('posted_on_group', id);
 
@@ -157,6 +158,45 @@ export class GroupsService {
       await this.supabase.from('groups').delete().eq('id', data.id);
       throw new Error(membersError.message);
     }
+  }
+
+  async getInvites(userId: string) {
+    const { data, error } = await this.supabase
+      .from('vw_invites')
+      .select('*')
+      .eq('invited_id', userId);
+
+    if (error) throw new Error(error.message);
+
+    if (!data) throw new NotFoundException();
+
+    const invites: InviteResponse[] = [];
+
+    data.map((d) =>
+      invites.push({
+        id: d.id,
+        userId: d.invited_id,
+        inviter: {
+          id: d.inviter_id,
+          name: d.inviter_name,
+          email: d.inviter_email,
+          username: d.inviter_username,
+          role: d.inviter_role,
+          picture: d.inviter_picture,
+          bio: d.inviter_bio,
+          streak: d.inviter_streak,
+          rankRating: d.inviter_rank_rating,
+          createdAt: d.inviter_created_at,
+        },
+        group: {
+          id: d.group_id,
+          name: d.group_name,
+          picture: d.group_picture,
+        },
+      }),
+    );
+
+    return invites;
   }
 
   async acceptInvite(invite_id: string, user: PayloadDto) {
