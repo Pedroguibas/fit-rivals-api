@@ -10,6 +10,8 @@ import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { hash } from 'bcrypt';
 import { UserResponse } from './dto/response/user-response.dto.js';
 import { parseUserType } from '../../helpers/parse-user-type.js';
+import { parseSelfUserType } from '../../helpers/parse-self-user-type.js';
+import { SelfUserResponse } from './dto/response/self-user-response.dto.js';
 
 @Injectable()
 export class UsersService {
@@ -41,17 +43,17 @@ export class UsersService {
 
   async getSelf(id: string) {
     const { data, error } = await this.supabase
-      .from('vw_users')
+      .from('vw_self_user')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error) throw new UnauthorizedException();
+    if (error) throw new Error(error.message);
 
-    return parseUserType(data);
+    return parseSelfUserType(data);
   }
 
-  async createUser(body: CreateUserDto): Promise<UserResponse> {
+  async createUser(body: CreateUserDto): Promise<SelfUserResponse> {
     const hashed_password = await hash(body.password, 12);
 
     const { data, error } = await this.supabase
@@ -64,23 +66,24 @@ export class UsersService {
       })
       .select(
         `
-      id,
-      name,
-      email,
-      username,
-      role,
-      picture,
-      bio,
-      streak,
-      rank_rating,
-      created_at
-    `,
+        id,
+        name,
+        email,
+        username,
+        role,
+        friend_code,
+        picture,
+        bio,
+        streak,
+        rank_rating,
+        created_at
+      `,
       )
       .single();
 
     if (error) throw new Error(error.message);
 
-    return parseUserType(data);
+    return parseSelfUserType(data);
   }
 
   async deleteUser(id: string) {
