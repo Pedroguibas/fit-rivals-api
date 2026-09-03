@@ -91,7 +91,7 @@ export class UsersService {
       .from('users')
       .update({
         deleted: true,
-        deleted_at: Date.now(),
+        deleted_at: new Date(),
       })
       .eq('id', id);
 
