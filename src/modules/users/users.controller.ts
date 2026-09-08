@@ -19,6 +19,7 @@ import { AdminGuard } from '../../guards/admin/admin.guard.js';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
   @Get()
   async getAllUsers() {
     return await this.usersService.getAllUsers();
@@ -46,8 +47,7 @@ export class UsersController {
     await this.usersService.deleteUser(req.user.sub);
   }
 
-  @UseGuards(AuthGuard('jwt'))
-  @UseGuards(AdminGuard)
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
   @Delete(':id')
   async deleteUser(@Param('id', new ParseUUIDPipe()) id: string) {
     await this.usersService.deleteUser(id);

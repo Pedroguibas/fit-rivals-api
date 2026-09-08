@@ -8,6 +8,7 @@ import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { FriendResponse } from './dto/response/friend-response.dto.js';
 import { parseFriendRequest } from '../../helpers/parse-friend-request.js';
+import { FriendRequestResponse } from './dto/response/friend-request-response.dto.js';
 
 @Injectable()
 export class FriendsService {
@@ -63,19 +64,37 @@ export class FriendsService {
   }
 
   async removeFriend(id: string, self: string) {
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('friends')
       .update({
         deleted: true,
         deleted_at: new Date(),
       })
       .eq('id', id)
-      .or(`first.eq.${self}, second.eq.${self}`);
+      .or(`first.eq.${self}, second.eq.${self}`)
+      .select('id')
+      .maybeSingle();
+
+    console.log(data);
 
     if (error) throw new Error(error.message);
+    if (!data) throw new NotFoundException();
   }
 
-  async getFriendRequests(self: string) {}
+  async getFriendRequests(self: string) {
+    const { data, error } = await this.supabase
+      .from('vw_friend_requests')
+      .select('*')
+      .eq('user_id', self);
+
+    if (error) throw new Error(error.message);
+
+    const requests: FriendRequestResponse[] = [];
+
+    data.map((d) => requests.push(parseFriendRequest(d)));
+
+    return requests;
+  }
 
   async createFriendRequest(self: string, user: string) {
     const { data, error } = await this.supabase
@@ -164,7 +183,36 @@ export class FriendsService {
       .eq('id', id);
 
     if (updateError) throw new Error(updateError.message);
+
+    await this.supabase
+      .from('friend_requests')
+      .update({
+        responded: true,
+        deleted_by_other_request_accept: true,
+      })
+      .eq('requester', self)
+      .eq('user_id', data.user_id);
   }
 
-  async denyFriendRequest(id: string, self: string) {}
+  async denyFriendRequest(id: string, self: string) {
+    const { data, error } = await this.supabase
+      .from('friend_requests')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', self)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) throw new BadRequestException();
+
+    const { error: updateError } = await this.supabase
+      .from('friend_requests')
+      .update({
+        responded: true,
+        accepted: false,
+      })
+      .eq('id', id);
+
+    if (updateError) throw new Error(updateError.message);
+  }
 }

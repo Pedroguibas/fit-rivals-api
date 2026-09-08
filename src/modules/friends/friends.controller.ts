@@ -23,13 +23,9 @@ export class FriendsController {
   async getFriends(@Req() req: AuthenticatedRequest) {
     return await this.friendsService.getFriends(req.user.sub);
   }
-
-  @Delete(':id')
-  async removeFriend(
-    @Req() req: AuthenticatedRequest,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
-    return await this.friendsService.removeFriend(id, req.user.sub);
+  @Get('requests')
+  async getFriendRequests(@Req() req: AuthenticatedRequest) {
+    return await this.friendsService.getFriendRequests(req.user.sub);
   }
 
   @Post('requests')
@@ -41,5 +37,29 @@ export class FriendsController {
       req.user.sub,
       body.user,
     );
+  }
+
+  @Post('requests/:id/accept')
+  async acceptFriendRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return await this.friendsService.acceptFriendRequest(id, req.user.sub);
+  }
+
+  @Post('requests/:id/deny')
+  async denyFriendRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return await this.friendsService.denyFriendRequest(id, req.user.sub);
+  }
+
+  @Delete(':id')
+  async removeFriend(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return await this.friendsService.removeFriend(id, req.user.sub);
   }
 }
