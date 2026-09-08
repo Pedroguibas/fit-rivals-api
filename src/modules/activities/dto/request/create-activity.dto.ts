@@ -9,7 +9,7 @@ import {
 
 export class CreateActivityDto {
   @IsInt()
-  type: string;
+  type: number;
 
   @IsOptional()
   @IsString()

@@ -14,7 +14,7 @@ export class AdminGuard implements CanActivate {
 
     const user: PayloadDto = req.user;
 
-    if (user.role !== 'ADMIN') throw new UnauthorizedException();
+    if (!user || user.role !== 'ADMIN') throw new UnauthorizedException();
 
     return true;
   }
