@@ -329,6 +329,9 @@ export class GroupsService {
   ) {
     await this.isUserGroupAdmin(group, self);
 
+    if (members.includes(self))
+      throw new BadRequestException('Cannot promote or demote yourself');
+
     const { data, error } = await this.supabase
       .from('group_members')
       .update({
