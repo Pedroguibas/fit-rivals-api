@@ -13,13 +13,16 @@ import { compare, hash } from 'bcrypt';
 import { PayloadDto } from './dto/payload.dto.js';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'crypto';
+import { createHash, randomInt } from 'crypto';
 import { RefreshDto } from './dto/refresh.dto.js';
+import { RestorePasswordCheckDto } from './dto/restore-password-check.dto.js';
+import nodemailer, { Mail, SMTPSentMessageInfo } from 'nodemailer';
 
 @Injectable()
 export class AuthService {
   private refresh_secret: string;
   private access_secret: string;
+  private mailer: Mail<SMTPSentMessageInfo>;
 
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
@@ -29,6 +32,15 @@ export class AuthService {
   ) {
     this.refresh_secret = this.configService.getOrThrow('JWT_REFRESH_SECRET');
     this.access_secret = this.configService.getOrThrow('JWT_ACCESS_SECRET');
+
+    this.mailer = nodemailer.createTransport({
+      host: this.configService.get('MAILER_HOST'),
+      port: this.configService.get('MAILER_PORT'),
+      auth: {
+        user: this.configService.get('MAILER_USER'),
+        pass: this.configService.get('MAILER_PASS'),
+      },
+    });
   }
 
   private async getTokenVersion(sub: string) {
@@ -134,5 +146,135 @@ export class AuthService {
   async massLogout(sub: string) {
     await this.redis.incr(`tokenVersion:${sub}`);
     await this.redis.del(sub);
+  }
+
+  async restorePasswordRequest(email: string) {
+    const { data, error } = await this.supabase
+      .from('vw_users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return;
+
+    const code = randomInt(100000, 999999).toString();
+
+    await this.mailer.sendMail({
+      from: '"FitRivals" <pedroguibas123@gmail.com>',
+      to: email,
+      subject: 'Recuperação de Senha',
+      text: `Seu código de recuperação de senha é: ${code}. Ele expira em 10 minutos.`,
+      html: `
+            <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+                <h2 style="color: #333;">Recuperação de Senha</h2>
+                <p>Olá, ${data.username ?? ''}</p>
+                <p>Recebemos uma solicitação para redefinir a sua senha. Use o código abaixo para prosseguir:</p>
+                <div style="background-color: #f4f4f4; text-align: center; padding: 15px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #007bff; margin: 20px 0; border-radius: 4px;">
+                    ${code}
+                </div>
+                <p style="font-size: 12px; color: #777;">Este código é válido por 10 minutos. Se você não solicitou essa alteração, ignore este e-mail.</p>
+            </div>
+        `,
+    });
+
+    const encriptedCode = await hash(code, 12);
+
+    await this.redis.set(`restore_password:${email}`, encriptedCode, {
+      expiration: {
+        type: 'EX',
+        value: 600,
+      },
+    });
+    await this.redis.del(`restore_password_tries:${email}`);
+  }
+
+  async restorePasswordCheck(body: RestorePasswordCheckDto) {
+    const codeKey = `restore_password:${body.email}`;
+
+    const checkCode = await this.redis.get(codeKey);
+
+    if (!checkCode) throw new UnauthorizedException();
+
+    const redisTriesKey = `restore_password_tries:${body.email}`;
+
+    let redisTries = Number(await this.redis.get(redisTriesKey));
+
+    const tries = redisTries ?? 0;
+
+    if (tries > 4) throw new UnauthorizedException();
+
+    const isValid = await compare(body.code, checkCode);
+
+    if (!isValid) {
+      await this.redis.incr(redisTriesKey);
+      await this.redis.expire(redisTriesKey, 600);
+      throw new UnauthorizedException();
+    }
+    await this.redis.del(codeKey);
+
+    await this.redis.set(`can_restore_password:${body.email}`, 1, {
+      expiration: {
+        type: 'EX',
+        value: 600,
+      },
+    });
+  }
+
+  async restorePassword(email: string, password: string) {
+    const redisKey = `can_restore_password:${email}`;
+    const canRestore = await this.redis.get(redisKey);
+
+    if (!canRestore) throw new UnauthorizedException();
+
+    const hashedPassword = await hash(password, 12);
+
+    const { data, error } = await this.supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+      })
+      .eq('email', email)
+      .select('id')
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    await this.redis.del(redisKey);
+
+    await this.massLogout(data.id);
+  }
+
+  async updatePassword(
+    id: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const { data, error: passwordError } = await this.supabase
+      .from('users')
+      .select('password')
+      .eq('id', id)
+      .eq('deleted', false)
+      .maybeSingle();
+
+    if (passwordError) throw new Error(passwordError.message);
+    if (!data) throw new UnauthorizedException();
+
+    const isCurrentCorrect = await compare(currentPassword, data.password);
+
+    if (!isCurrentCorrect) throw new UnauthorizedException();
+
+    const hashedPassword = await hash(newPassword, 12);
+
+    const { error } = await this.supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+      })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+
+    await this.massLogout(id);
   }
 }

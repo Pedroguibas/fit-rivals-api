@@ -17,10 +17,6 @@ import { AuthGuard } from '@nestjs/passport';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type.js';
 import { AdminGuard } from '../../guards/admin/admin.guard.js';
 import { UpdateUserDto } from './dto/request/update-user.dto.js';
-import { UpdatePasswordDto } from './dto/request/update-password.dto.js';
-import { RestorePasswordRequestDto } from './dto/request/restore-password-request.dto.js';
-import { RestorePasswordCheckDto } from './dto/request/restore-password-check.dto.js';
-import { RestorePasswordDto } from './dto/request/restore-password.dto.js';
 
 @Controller('users')
 export class UsersController {
@@ -48,16 +44,6 @@ export class UsersController {
     return await this.usersService.createUser(body);
   }
 
-  @Post('password/restore/request')
-  async requestToRestorePassword(@Body() body: RestorePasswordRequestDto) {
-    await this.usersService.restorePasswordRequest(body.email);
-  }
-
-  @Post('password/restore/check')
-  async checkToRestorePassword(@Body() body: RestorePasswordCheckDto) {
-    await this.usersService.restorePasswordCheck(body);
-  }
-
   @UseGuards(AuthGuard('jwt'))
   @Delete()
   async deleteSelf(@Req() req: AuthenticatedRequest) {
@@ -82,23 +68,5 @@ export class UsersController {
     )
       throw new BadRequestException();
     return await this.usersService.updateUser(req.user.sub, body);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Patch('password')
-  async updatePassword(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: UpdatePasswordDto,
-  ) {
-    return await this.usersService.updatePassword(
-      req.user.sub,
-      body.currentPassword,
-      body.newPassword,
-    );
-  }
-
-  @Patch('password/restore')
-  async restorePassword(@Body() body: RestorePasswordDto) {
-    await this.usersService.restorePassword(body.email, body.password);
   }
 }
