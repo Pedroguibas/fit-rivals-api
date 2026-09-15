@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { PayloadDto } from '../auth/dto/payload.dto.js';
@@ -149,6 +154,40 @@ export class ActivitiesService {
     body: CreateActivityDto,
     user: PayloadDto,
   ): Promise<ActivityResponse> {
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+
+    const { data: recentActivity } = await this.supabase
+      .from('activities')
+      .select('created_at')
+      .eq('author_id', user.sub)
+      .gte('created_at', sixHoursAgo)
+      .limit(1)
+      .maybeSingle();
+
+    if (!recentActivity) {
+      const { data: activityRankReward } = await this.supabase
+        .from('activity_types')
+        .select('reward_points')
+        .eq('id', body.type)
+        .maybeSingle();
+
+      if (!activityRankReward) throw new BadRequestException();
+
+      const { data: current } = await this.supabase
+        .from('users')
+        .select('rank_rating, coins')
+        .eq('id', user.sub)
+        .single();
+
+      await this.supabase
+        .from('users')
+        .update({
+          rank_rating: current?.rank_rating + activityRankReward.reward_points,
+          coins: current?.coins + activityRankReward.reward_points,
+        })
+        .eq('id', user.sub);
+    }
+
     const { data: insertData, error: insertError } = await this.supabase
       .from('activities')
       .insert({
