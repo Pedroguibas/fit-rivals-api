@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +27,32 @@ export class ActivitiesController {
   @Get()
   async getActivities(@Req() req: AuthenticatedRequest) {
     return await this.activitiesService.getActivities(req.user.sub);
+  }
+
+  @Get('feed')
+  async getActivitiesFeed(
+    @Req() req: AuthenticatedRequest,
+    @Query('page', new DefaultValuePipe(0)) page: number,
+  ) {
+    return await this.activitiesService.getActivitiesFeed(
+      req.user.sub,
+      page,
+      20,
+    );
+  }
+
+  @Get('feed/group/:group_id')
+  async getGroupActivitiesFeed(
+    @Req() req: AuthenticatedRequest,
+    @Param('group_id', new ParseUUIDPipe()) group_id: string,
+    @Query('page', new DefaultValuePipe(0)) page: number,
+  ) {
+    return await this.activitiesService.getGroupActivitiesFeed(
+      req.user.sub,
+      group_id,
+      page,
+      20,
+    );
   }
 
   @Get(':id')
