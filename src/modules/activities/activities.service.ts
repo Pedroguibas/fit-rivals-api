@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -23,14 +24,7 @@ export class ActivitiesService {
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
   ) {}
 
-  async getActivities(id: string) {
-    const { data, error } = await this.supabase
-      .from('vw_activities')
-      .select('*')
-      .eq('author_id', id);
-
-    if (error) throw new Error(error.message);
-
+  private async getActivitiesParticipants(data: any[]) {
     const activityIds: string[] = [];
 
     data.map((d) => activityIds.push(d.id));
@@ -79,6 +73,81 @@ export class ActivitiesService {
     });
 
     return activities;
+  }
+
+  async getActivities(id: string) {
+    const { data, error } = await this.supabase
+      .from('vw_activities')
+      .select('*')
+      .eq('author_id', id);
+
+    if (error) throw new Error(error.message);
+
+    return await this.getActivitiesParticipants(data);
+  }
+
+  async getActivitiesFeed(id: string, page: number, pageSize: number) {
+    const { data: userFriends, error: friendsError } = await this.supabase
+      .from('friends')
+      .select('first, second')
+      .or(`first.eq.${id}, second.eq.${id}`);
+
+    if (friendsError) throw new Error(friendsError.message);
+
+    if (!userFriends) return [];
+
+    const friends: string[] = [];
+
+    userFriends.map((f) => friends.push(f.first != id ? f.first : f.second));
+
+    const rangeStart = page * pageSize;
+    const rangeEnd = rangeStart + pageSize;
+
+    const { data, error } = await this.supabase
+      .from('vw_activities')
+      .select('*')
+      .in('author_id', friends)
+      .is('group_id', null)
+      .order('created_at', { ascending: false })
+      .range(rangeStart, rangeEnd);
+
+    if (error) throw new Error(error.message);
+
+    return await this.getActivitiesParticipants(data);
+  }
+
+  async getGroupActivitiesFeed(
+    id: string,
+    group_id: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const { data: isUserInGroup, error: isUserInGroupError } =
+      await this.supabase
+        .from('group_members')
+        .select('*')
+        .eq('user_id', id)
+        .eq('group_id', group_id)
+        .eq('has_left', false)
+        .maybeSingle();
+
+    if (isUserInGroupError) throw new Error(isUserInGroupError.message);
+
+    if (!isUserInGroup) throw new UnauthorizedException();
+
+    const rangeStart = page * pageSize;
+    const rangeEnd = rangeStart + pageSize;
+
+    const { data, error } = await this.supabase
+      .from('vw_activities')
+      .select('*')
+      .eq('group_id', group_id)
+      .order('created_at', { ascending: false })
+      .range(rangeStart, rangeEnd);
+
+    if (error) throw new Error(error.message);
+
+    return await this.getActivitiesParticipants(data);
   }
 
   async getActivityById(id: string): Promise<ActivityResponse> {
