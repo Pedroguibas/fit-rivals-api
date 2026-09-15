@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.provider.js';
 import type { RedisClientType } from '@redis/client';
@@ -90,7 +85,7 @@ export class AuthService {
 
     if (error) throw new Error();
 
-    if (!data) throw new NotFoundException();
+    if (!data) throw new UnauthorizedException();
 
     const correct_password = await compare(credentials.password, data.password);
 
