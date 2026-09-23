@@ -34,6 +34,16 @@ export class UsersController {
     return await this.usersService.getSelf(req.user.sub);
   }
 
+  @Get('validation/username/:username')
+  async usernameExists(@Param('username') username: string) {
+    return this.usersService.usernameExists(username);
+  }
+
+  @Get('validation/email/:email')
+  async emailExists(@Param('email') email: string) {
+    return this.usersService.emailExists(email);
+  }
+
   @Get(':id')
   async getUserById(@Param('id') id: string) {
     return await this.usersService.getUserById(id);
