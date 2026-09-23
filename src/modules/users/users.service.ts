@@ -54,6 +54,30 @@ export class UsersService {
     return parseSelfUserType(data);
   }
 
+  async usernameExists(username: string) {
+    const { data, error } = await this.supabase
+      .from('vw_users')
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+
+    return data != null;
+  }
+
+  async emailExists(email: string) {
+    const { data, error } = await this.supabase
+      .from('vw_users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+
+    return data != null;
+  }
+
   async createUser(body: CreateUserDto): Promise<SelfUserResponse> {
     const hashed_password = await hash(body.password, 12);
 
