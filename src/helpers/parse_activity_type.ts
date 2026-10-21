@@ -7,6 +7,7 @@ export const parseActivityType = (
   data: any,
   group: GroupResponse | null,
   participants: UserResponse[],
+  reaction: 'VALID' | 'INVALID' | 'UNSURE' | null = null,
 ): ActivityResponse => {
   return {
     id: data.id,
@@ -23,5 +24,6 @@ export const parseActivityType = (
     author: parseUserType(data, 'author_'),
     group,
     participants: participants,
+    reaction,
   };
 };

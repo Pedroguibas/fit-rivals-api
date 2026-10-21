@@ -11,4 +11,5 @@ export type ActivityResponse = {
   author: UserResponse;
   group: GroupResponse | null;
   participants: UserResponse[];
+  reaction: 'VALID' | 'INVALID' | 'UNSURE' | null;
 };

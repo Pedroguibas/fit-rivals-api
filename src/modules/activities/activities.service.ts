@@ -24,7 +24,10 @@ export class ActivitiesService {
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
   ) {}
 
-  private async getActivitiesParticipants(data: any[]) {
+  private async getActivitiesParticipantsAndUserReaction(
+    userId: string,
+    data: any[],
+  ) {
     const activityIds: string[] = [];
 
     data.map((d) => activityIds.push(d.id));
@@ -52,6 +55,14 @@ export class ActivitiesService {
 
     if (participantsError) throw new Error(participantsError.message);
 
+    const { data: reactionsData, error: reactionsError } = await this.supabase
+      .from('activity_reactions')
+      .select('activity_id, reaction')
+      .in('activity_id', activityIds)
+      .eq('user_id', userId);
+
+    if (reactionsError) throw new Error(reactionsError.message);
+
     const activities: ActivityResponse[] = [];
 
     data.map((d) => {
@@ -61,6 +72,15 @@ export class ActivitiesService {
         if (p.activity_id == d.id) participants.push(parseUserType(p.users));
       });
 
+      let reaction: 'VALID' | 'INVALID' | 'UNSURE' | null = null;
+
+      for (let i = 0; i < reactionsData.length; i++) {
+        if (reactionsData[i].activity_id == d.id) {
+          reaction = reactionsData[i].reaction;
+          break;
+        }
+      }
+
       const group: GroupResponse | null = d.group_id
         ? {
             id: d.group_id,
@@ -69,7 +89,7 @@ export class ActivitiesService {
           }
         : null;
 
-      activities.push(parseActivityType(d, group, participants));
+      activities.push(parseActivityType(d, group, participants, reaction));
     });
 
     return activities;
@@ -83,20 +103,21 @@ export class ActivitiesService {
 
     if (error) throw new Error(error.message);
 
-    return await this.getActivitiesParticipants(data);
+    return await this.getActivitiesParticipantsAndUserReaction(id, data);
   }
 
   async getActivitiesFeed(id: string, page: number, pageSize: number) {
     const { data: userFriends, error: friendsError } = await this.supabase
       .from('friends')
       .select('first, second')
-      .or(`first.eq.${id}, second.eq.${id}`);
+      .or(`first.eq.${id}, second.eq.${id}`)
+      .eq('deleted', false);
 
     if (friendsError) throw new Error(friendsError.message);
 
     if (!userFriends) return [];
 
-    const friends: string[] = [];
+    const friends: string[] = [id];
 
     userFriends.map((f) => friends.push(f.first != id ? f.first : f.second));
 
@@ -113,7 +134,7 @@ export class ActivitiesService {
 
     if (error) throw new Error(error.message);
 
-    return await this.getActivitiesParticipants(data);
+    return await this.getActivitiesParticipantsAndUserReaction(id, data);
   }
 
   async getGroupActivitiesFeed(
@@ -147,7 +168,7 @@ export class ActivitiesService {
 
     if (error) throw new Error(error.message);
 
-    return await this.getActivitiesParticipants(data);
+    return await this.getActivitiesParticipantsAndUserReaction(id, data);
   }
 
   async getActivityById(id: string): Promise<ActivityResponse> {
