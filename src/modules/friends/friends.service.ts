@@ -97,10 +97,17 @@ export class FriendsService {
   }
 
   async createFriendRequest(self: string, user: string) {
+    const formatted_friendcode =
+      user.length == 16
+        ? `${user.slice(0, 4)}-${user.slice(4, 8)}-${user.slice(8, 12)}-${user.slice(12, 16)}`.toUpperCase()
+        : user.toUpperCase();
+
     const { data, error } = await this.supabase
       .from('users')
       .select('id')
-      .or(`username.eq.${user}, email.eq.${user}, friend_code.eq.${user}`)
+      .or(
+        `username.eq.${user}, email.eq.${user}, friend_code.eq.${user}, friend_code.eq.${formatted_friendcode}`,
+      )
       .eq('deleted', false)
       .maybeSingle();
 
