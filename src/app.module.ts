@@ -10,6 +10,8 @@ import { ConfigModule } from '@nestjs/config';
 import { RedisModule } from './modules/redis/redis.module.js';
 import { ActivitiesModule } from './modules/activities/activities.module.js';
 import { FriendsModule } from './modules/friends/friends.module.js';
+import { R2Module } from './modules/r2/r2.module.js';
+import { ImagesModule } from './modules/images/images.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -30,6 +32,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     RedisModule,
     ActivitiesModule,
     FriendsModule,
+    R2Module,
+    ImagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -15,7 +15,7 @@ export class CreateActivityDto {
   @IsString()
   caption: string | null;
 
-  @IsUrl()
+  @IsString()
   picture: string;
 
   @IsOptional()

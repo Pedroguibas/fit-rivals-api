@@ -41,6 +41,11 @@ export class ActivitiesController {
     );
   }
 
+  @Get('types')
+  async getActivityTypes() {
+    return await this.activitiesService.getActivityTypes();
+  }
+
   @Get('feed/group/:group_id')
   async getGroupActivitiesFeed(
     @Req() req: AuthenticatedRequest,
