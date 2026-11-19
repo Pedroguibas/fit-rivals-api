@@ -21,6 +21,6 @@ export class CreateActivityTypeDto {
   @IsPositive()
   reward_points: number;
 
-  @IsUrl()
+  @IsString()
   picture: string;
 }

@@ -17,6 +17,7 @@ import { GroupResponse } from '../groups/dto/response/group-response.dto.js';
 import { UserResponse } from '../users/dto/response/user-response.dto.js';
 import { parseUserType } from '../../helpers/parse-user-type.js';
 import { parseActivityType } from '../../helpers/parse_activity_type.js';
+import { ActivityTypeResponse } from './dto/response/activity-type-response.dto.js';
 
 @Injectable()
 export class ActivitiesService {
@@ -104,6 +105,17 @@ export class ActivitiesService {
     if (error) throw new Error(error.message);
 
     return await this.getActivitiesParticipantsAndUserReaction(id, data);
+  }
+
+  async getActivityTypes() {
+    const { data, error } = await this.supabase
+      .from('vw_activity_types')
+      .select('*')
+      .order('name');
+
+    if (error) throw new Error(error.message);
+
+    return data as ActivityTypeResponse[];
   }
 
   async getActivitiesFeed(id: string, page: number, pageSize: number) {
