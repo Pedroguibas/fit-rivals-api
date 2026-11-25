@@ -17,6 +17,7 @@ import { parseActivityType } from '../../helpers/parse_activity_type.js';
 import { parseGroupMemberType } from '../../helpers/parse-group-member-type.js';
 import { UpdateGroupDto } from './dto/request/update-group-.dto.js';
 import { parseGroupType } from '../../helpers/parse-group-type.js';
+import { GroupData } from '../../types/GroupData.js';
 
 @Injectable()
 export class GroupsService {
@@ -31,6 +32,7 @@ export class GroupsService {
         .select('admin')
         .eq('group_id', id)
         .eq('user_id', user)
+        .eq('has_left', false)
         .single();
 
     if (isUserInGroupError) throw new Error(isUserInGroupError.message);
@@ -48,8 +50,9 @@ export class GroupsService {
   async getGroups(user: string) {
     const { data, error } = await this.supabase
       .from('group_members')
-      .select('group_id')
-      .eq('user_id', user);
+      .select('group_id, admin')
+      .eq('user_id', user)
+      .eq('has_left', false);
 
     if (error) throw new Error(error.message);
     if (!data) throw new NotFoundException();
@@ -67,6 +70,12 @@ export class GroupsService {
     const groups: GroupResponse[] = [];
 
     groupData.map((d) => groups.push(parseGroupType(d)));
+
+    data.map((d) => {
+      if (d.admin)
+        for (let i = 0; i < groups.length; i++)
+          if (groups[i].id == d.group_id) groups[i].admin = true;
+    });
 
     return groups;
   }
@@ -119,7 +128,7 @@ export class GroupsService {
     const { data, error } = await this.supabase
       .from('vw_activities')
       .select('*')
-      .eq('posted_on_group', id);
+      .eq('group_id', id);
 
     if (error) throw new Error(error.message);
 
@@ -140,7 +149,7 @@ export class GroupsService {
     const response: ActivityResponse[] = [];
 
     data.map((d) => {
-      const group: GroupResponse = {
+      const group: GroupData = {
         id: d.group_id,
         name: d.group_name,
         picture: d.group_picture,
@@ -223,7 +232,9 @@ export class GroupsService {
       throw new Error(inviterError.message);
     }
 
-    return parseGroupType(data);
+    const group = parseGroupType(data);
+    group.admin = true;
+    return group;
   }
 
   async getInvites(userId: string) {
@@ -371,5 +382,49 @@ export class GroupsService {
     if (error || !data) throw new BadRequestException();
 
     return parseGroupType(data);
+  }
+
+  async leaveGroup(group: string, self: string) {
+    const { error } = await this.supabase
+      .from('group_members')
+      .update({ has_left: true, leave_date: new Date() })
+      .eq('group_id', group)
+      .eq('user_id', self);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async deleteGroup(group: string, self: string) {
+    const { data: isAdmin, error: isAdminError } = await this.supabase
+      .from('group_members')
+      .select('admin')
+      .eq('group_id', group)
+      .eq('user_id', self)
+      .eq('has_left', false)
+      .maybeSingle();
+
+    if (isAdminError) throw new Error(isAdminError.message);
+
+    if (!isAdmin) throw new UnauthorizedException();
+
+    const { error: groupError } = await this.supabase
+      .from('groups')
+      .update({
+        deleted: true,
+        deleted_at: new Date(),
+      })
+      .eq('id', group);
+
+    if (groupError) throw new Error(groupError.message);
+
+    const { error } = await this.supabase
+      .from('group_invites')
+      .update({
+        responded: true,
+        accepted: false,
+      })
+      .eq('group_id', group);
+
+    if (error) throw new Error(error.message);
   }
 }

@@ -60,7 +60,9 @@ export class FriendsService {
       }
     });
 
-    return friends;
+    return friends.toSorted((a, b) =>
+      a.friend.name.localeCompare(b.friend.name),
+    );
   }
 
   async removeFriend(id: string, self: string) {
