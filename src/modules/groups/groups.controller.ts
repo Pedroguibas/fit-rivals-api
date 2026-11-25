@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -126,5 +127,15 @@ export class GroupsController {
     @Body() body: InviteToGroupDto,
   ) {
     return await this.groupsService.inviteToGroup(id, body.users, req.user.sub);
+  }
+
+  @Post(':id/leave')
+  async leaveGroup(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return await this.groupsService.leaveGroup(id, req.user.sub);
+  }
+
+  @Delete(':id')
+  async deleteGroup(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return await this.groupsService.deleteGroup(id, req.user.sub);
   }
 }

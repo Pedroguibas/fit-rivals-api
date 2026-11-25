@@ -18,6 +18,7 @@ import { UserResponse } from '../users/dto/response/user-response.dto.js';
 import { parseUserType } from '../../helpers/parse-user-type.js';
 import { parseActivityType } from '../../helpers/parse_activity_type.js';
 import { ActivityTypeResponse } from './dto/response/activity-type-response.dto.js';
+import { GroupData } from '../../types/GroupData.js';
 
 @Injectable()
 export class ActivitiesService {
@@ -82,7 +83,7 @@ export class ActivitiesService {
         }
       }
 
-      const group: GroupResponse | null = d.group_id
+      const group: GroupData | null = d.group_id
         ? {
             id: d.group_id,
             name: d.group_name,
@@ -221,7 +222,7 @@ export class ActivitiesService {
 
     participantsData.map((p) => participants.push(parseUserType(p.users)));
 
-    const group: GroupResponse | null = data.group_id
+    const group: GroupData | null = data.group_id
       ? {
           id: data.group_id,
           name: data.group_name,
@@ -349,7 +350,7 @@ export class ActivitiesService {
 
     if (error) throw new Error(error.message);
 
-    const group: GroupResponse | null = data.group_id
+    const group: GroupData | null = data.group_id
       ? {
           id: data.group_id,
           name: data.group_name,

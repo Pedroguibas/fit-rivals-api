@@ -1,11 +1,11 @@
 import { ActivityResponse } from '../modules/activities/dto/response/activity-response.dto.js';
-import { GroupResponse } from '../modules/groups/dto/response/group-response.dto.js';
 import { UserResponse } from '../modules/users/dto/response/user-response.dto.js';
+import { GroupData } from '../types/GroupData.js';
 import { parseUserType } from './parse-user-type.js';
 
 export const parseActivityType = (
   data: any,
-  group: GroupResponse | null,
+  group: GroupData | null,
   participants: UserResponse[],
   reaction: 'VALID' | 'INVALID' | 'UNSURE' | null = null,
 ): ActivityResponse => {
